@@ -15,7 +15,7 @@ function splitPath(path) {
 // failures leave the boards in place, since they're fine and a re-run only fills in what's missing.
 async function runBuild(inputs, onProgress = () => {}, options = {}) {
   const { doc, sourceId, textIds, logoIds, font, date, audio, templates, aePath } = inputs;
-  const report = { ok: false, built: [], skipped: [], issues: [], aepPath: null };
+  const report = { ok: false, built: [], skipped: [], issues: [], aepPath: null, timings: {} };
   const { dir, base } = splitPath(String(doc.path));
   const aepBase = visualsName(base);
 
@@ -24,7 +24,8 @@ async function runBuild(inputs, onProgress = () => {}, options = {}) {
   try {
     boards = await buildArtboards(
       { doc, sourceId, textIds, logoIds, font, flyer: templates.flyer, banner: templates.banner },
-      (name, done, total) => onProgress(`Built ${name}`, 2 + Math.round((60 * done) / total))
+      (name, done, total) => onProgress(`Built ${name}`, 2 + Math.round((60 * done) / total)),
+      (stage) => onProgress(stage, 63)
     );
   } catch (e) {
     report.issues.push(`The artboards couldn't be built, so the PSD wasn't changed: ${explainError(e.message)}`);
@@ -32,6 +33,7 @@ async function runBuild(inputs, onProgress = () => {}, options = {}) {
   }
   report.built = boards.built;
   report.skipped = boards.skipped;
+  report.timings = boards.timings || {};
   report.issues.push(...boards.issues);
 
   onProgress("Saving images for After Effects", 65);

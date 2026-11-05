@@ -1,5 +1,6 @@
 // Runs inside Photoshop, with After Effects closed. Leaves AE open on the result; quit it gracefully afterward.
-// node dev/ps.js dev/ps-tests/bridge.test.js "{\"template\":\"...\",\"aePath\":\"...\",\"imagesDir\":\"...\",\"outDir\":\"...\"}" --timeout=800
+// Builds two releases in a row in one AE session, so it needs two output names in the same folder.
+// node dev/ps.js dev/ps-tests/bridge.test.js "{\"template\":\"...\",\"aePath\":\"...\",\"imagesDir\":\"...\",\"outDir\":\"...\"}" --timeout=1100
 const fs = require("fs");
 const kit = require("./kit");
 const { buildVisuals, runInAfterEffects } = require("../../plugin/src/ae/bridge");
@@ -51,6 +52,7 @@ exports.run = async (arg, ctx) => {
   const readback = `(function(){
     var out=new File(${asciiJson(dataFile)});out.encoding="UTF-8";out.open("w");
     out.writeln("PROJECT="+app.project.file.fsName);
+    out.writeln("DIRTY="+app.project.dirty);
     for(var i=1;i<=app.project.numItems;i++){var it=app.project.item(i);
       if(it instanceof FootageItem&&it.file)out.writeln(it.name+"="+it.file.fsName);}
     out.close();
@@ -64,6 +66,14 @@ exports.run = async (arg, ctx) => {
     check("AE links " + f + " through the & and Ø path", lines.includes("TMLS043_Bukkoy&Ray_Ø Test_VisualsAEP Assets\\" + f), lines);
   }
   check("no footage links to another release", !/TMLS044|She Wants/.test(lines), lines);
+  check("the saved project has no unsaved changes", lines.includes("DIRTY=false"), lines.slice(0, 300));
+
+  // A second release in the same AE session. AE used to say the first project had unsaved changes.
+  const second = native(folder + "/TMLS047_Second_VisualsAEP.aep");
+  const again = await buildVisuals({ ...settings, outputPath: second }, () => {}, { aeSource });
+  ctx.log("second " + JSON.stringify(again));
+  check("a second build in the same AE session succeeds", again.ok === true && again.aepPath === second, again);
+  check("the second AEP is on disk", exists(second));
 
   // A failure inside AE comes back in the report.
   const broken = await buildVisuals({ ...settings, outputPath: native(folder + "/Broken_VisualsAEP.aep"), templatePath: "C:\\nope\\template.aep" }, () => {}, { aeSource });

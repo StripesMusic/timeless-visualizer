@@ -12,6 +12,16 @@ const HISTORY_NAME = "Timeless Visualizer";
 const MASTER_NAME = "TV Master";
 const WRAP_NAME = "Cover Art";
 
+// Runs one finishing step and records how long it took, in ms, under `name`.
+async function timed(timings, name, step) {
+  const started = Date.now();
+  try {
+    return await step();
+  } finally {
+    timings[name] = Date.now() - started;
+  }
+}
+
 const topLayer = (doc, id) => Array.from(doc.layers).find((l) => l.id === id);
 const toTree = (layers) => Array.from(layers).map((l) => ({ id: l.id, ...(l.layers ? { layers: toTree(l.layers) } : {}) }));
 const notInside = (paths, containers) => paths.filter((p) => !containers.some((c) => isWithin(p, c)));
@@ -175,7 +185,7 @@ async function finishBoards(doc, made) {
   }
 }
 
-async function build(doc, { sourceId, textIds, logoIds, font, flyer, banner }, onProgress) {
+async function build(doc, { sourceId, textIds, logoIds, font, flyer, banner }, onProgress, onStage, timings) {
   const issues = [];
   let boards = listArtboards(doc);
 
@@ -188,14 +198,14 @@ async function build(doc, { sourceId, textIds, logoIds, font, flyer, banner }, o
       if (!named.has(def.name) && def.template && templatePaths[def.template]) await templates.get(templatePaths[def.template]);
     }
     app.activeDocument = doc;
-    return await buildAll(doc, { sourceId, textIds, logoIds, font, templatePaths, templates, boards, issues }, onProgress);
+    return await buildAll(doc, { sourceId, textIds, logoIds, font, templatePaths, templates, boards, issues }, onProgress, onStage, timings);
   } finally {
-    await templates.closeAll();
+    await timed(timings, "closeTemplates", () => templates.closeAll());
     app.activeDocument = doc;
   }
 }
 
-async function buildAll(doc, { sourceId, textIds, logoIds, font, templatePaths, templates, boards, issues }, onProgress) {
+async function buildAll(doc, { sourceId, textIds, logoIds, font, templatePaths, templates, boards, issues }, onProgress, onStage, timings) {
   if (!boards.length) {
     sourceId = await wrapInArtboard(doc);
     boards = listArtboards(doc);
@@ -233,30 +243,37 @@ async function buildAll(doc, { sourceId, textIds, logoIds, font, templatePaths, 
     built.push(def.name);
     await onProgress(def.name, i + 1, missing.length);
   }
-  await a.deleteLayers([masterId]);
-  await finishBoards(doc, made);
-  for (const id of guarded) await a.setNestingLock(id, false);
+  // TMLS047 sat here for 20 minutes where TMLS043 took 9 s, so each step is timed for the report.
+  await onStage("Finishing up");
+  await timed(timings, "deleteMaster", () => a.deleteLayers([masterId]));
+  await timed(timings, "finishBoards", () => finishBoards(doc, made));
+  await timed(timings, "releaseLocks", async () => {
+    for (const id of guarded) await a.setNestingLock(id, false);
+  });
   return { built, skipped, issues, sourceId: source.id, boards: made };
 }
 
 // One undo step. If anything fails, the document goes back to how it was and the error is passed on.
-async function buildArtboards({ doc, sourceId, textIds, logoIds, font, flyer, banner }, onProgress = () => {}) {
+// The report's `timings` holds how long each finishing step took, in ms.
+async function buildArtboards({ doc, sourceId, textIds, logoIds, font, flyer, banner }, onProgress = () => {}, onStage = () => {}) {
   const existing = listArtboards(doc);
   if (existing.length) {
     const taken = new Set(existing.map((b) => b.name));
     if (BOARDS.every((b) => taken.has(b.name))) {
-      return { built: [], skipped: BOARDS.map((b) => b.name), issues: [], sourceId, boards: [] };
+      return { built: [], skipped: BOARDS.map((b) => b.name), issues: [], sourceId, boards: [], timings: {} };
     }
   }
   let report;
   let failure = null;
+  const timings = {};
   await core.executeAsModal(
     async (modal) => {
       app.activeDocument = doc;
       const suspension = await modal.hostControl.suspendHistory({ documentID: doc.id, name: HISTORY_NAME });
       try {
-        report = await build(doc, { sourceId, textIds, logoIds, font, flyer, banner }, onProgress);
-        await modal.hostControl.resumeHistory(suspension, true);
+        report = await build(doc, { sourceId, textIds, logoIds, font, flyer, banner }, onProgress, onStage, timings);
+        await onStage("Finishing up: saving the undo step");
+        await timed(timings, "resumeHistory", () => modal.hostControl.resumeHistory(suspension, true));
       } catch (e) {
         failure = e;
         await modal.hostControl.resumeHistory(suspension, false);
@@ -265,7 +282,7 @@ async function buildArtboards({ doc, sourceId, textIds, logoIds, font, flyer, ba
     { commandName: HISTORY_NAME }
   );
   if (failure) throw failure;
-  return report;
+  return { ...report, timings };
 }
 
 module.exports = { buildArtboards };
