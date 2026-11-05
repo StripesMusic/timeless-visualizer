@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="main.js"></script>
+  </head>
+  <body>
+    <div class="panel">
+      <div class="field">
+        <sp-label>Source art</sp-label>
+        <sp-picker id="source" placeholder="Pick an artboard" size="s">
+          <sp-menu slot="options" id="sourceMenu"></sp-menu>
+        </sp-picker>
+        <sp-detail id="sourceNote" class="note"></sp-detail>
+      </div>
+
+      <div class="field">
+        <sp-label>Text</sp-label>
+        <div class="row">
+          <sp-button id="useText" variant="secondary" size="s">Use selection</sp-button>
+          <sp-detail id="textNames" class="names">Nothing picked</sp-detail>
+        </div>
+      </div>
+
+      <div class="field">
+        <sp-label>Logo</sp-label>
+        <div class="row">
+          <sp-button id="useLogo" variant="secondary" size="s">Use selection</sp-button>
+          <sp-detail id="logoNames" class="names">Nothing picked</sp-detail>
+        </div>
+      </div>
+
+      <div class="field">
+        <sp-label>Font to match</sp-label>
+        <sp-picker id="font" placeholder="Pick the Text layers first" size="s" disabled>
+          <sp-menu slot="options" id="fontMenu"></sp-menu>
+        </sp-picker>
+        <sp-detail id="fontNote" class="note"></sp-detail>
+      </div>
+
+      <div class="field">
+        <sp-label>Release date</sp-label>
+        <sp-textfield id="date" placeholder="28 AUG 2026" size="s"></sp-textfield>
+      </div>
+
+      <div class="field">
+        <sp-label>Coming Soon audio (optional)</sp-label>
+        <div class="row">
+          <sp-button id="audioComing" variant="secondary" size="s">Choose</sp-button>
+          <sp-detail id="audioComingName" class="names">None</sp-detail>
+          <sp-action-button id="audioComingClear" size="s" quiet>Clear</sp-action-button>
+        </div>
+      </div>
+
+      <div class="field">
+        <sp-label>Out Now audio (optional)</sp-label>
+        <div class="row">
+          <sp-button id="audioOut" variant="secondary" size="s">Choose</sp-button>
+          <sp-detail id="audioOutName" class="names">None</sp-detail>
+          <sp-action-button id="audioOutClear" size="s" quiet>Clear</sp-action-button>
+        </div>
+      </div>
+
+      <div class="build">
+        <sp-button id="build" variant="cta" disabled>Build</sp-button>
+        <sp-progressbar id="progress" max="100" value="0" size="s" class="hidden"></sp-progressbar>
+        <sp-detail id="status" class="note"></sp-detail>
+        <div id="problems" class="list"></div>
+        <div id="report" class="list"></div>
+      </div>
+
+      <div class="setup">
+        <sp-heading size="XXS">Set once</sp-heading>
+        <div class="field">
+          <sp-label>Flyer template</sp-label>
+          <div class="row">
+            <sp-textfield id="pathFlyer" size="s" class="grow"></sp-textfield>
+            <sp-action-button id="chooseFlyer" size="s">Choose</sp-action-button>
+          </div>
+        </div>
+        <div class="field">
+          <sp-label>SoundCloud banner template</sp-label>
+          <div class="row">
+            <sp-textfield id="pathBanner" size="s" class="grow"></sp-textfield>
+            <sp-action-button id="chooseBanner" size="s">Choose</sp-action-button>
+          </div>
+        </div>
+        <div class="field">
+          <sp-label>Visuals template</sp-label>
+          <div class="row">
+            <sp-textfield id="pathVisuals" size="s" class="grow"></sp-textfield>
+            <sp-action-button id="chooseVisuals" size="s">Choose</sp-action-button>
+          </div>
+        </div>
+        <div class="field">
+          <sp-label>After Effects</sp-label>
+          <div class="row">
+            <sp-textfield id="pathAe" size="s" class="grow"></sp-textfield>
+            <sp-action-button id="chooseAe" size="s">Choose</sp-action-button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,88 @@
+body {
+  margin: 0;
+  color: var(--uxp-host-text-color);
+  font-size: var(--uxp-host-font-size);
+  background-color: var(--uxp-host-background-color);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.row > * {
+  margin-right: 8px;
+}
+
+.row > *:last-child {
+  margin-right: 0;
+}
+
+.grow {
+  flex-grow: 1;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.names {
+  flex-grow: 1;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.note {
+  margin-top: 4px;
+}
+
+.build {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  margin-bottom: 16px;
+}
+
+.build sp-button {
+  align-self: flex-start;
+}
+
+.build sp-progressbar {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.list {
+  margin-top: 8px;
+}
+
+.list sp-body {
+  margin-bottom: 4px;
+}
+
+.setup {
+  padding-top: 12px;
+  border-top: 1px solid var(--uxp-host-border-color);
+}
+
+.setup sp-heading {
+  margin-bottom: 8px;
+}
+
+.hidden {
+  display: none;
+}

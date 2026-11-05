@@ -1,0 +1,8 @@
+*.psd
+*.psb
+*.aep
+*.aepx
+*.ccx
+node_modules/
+dev/run/
+.impeccable/
