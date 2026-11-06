@@ -55,6 +55,30 @@ async function setNestingLock(id, on) {
   await setLock(id, { ...current, protectArtboardAutonest: on });
 }
 
+// The current locks of many layers, read in one call, without the descriptor's _obj.
+async function locksOf(ids) {
+  if (!ids.length) return [];
+  const described = await play(ids.map((id) => ({ _obj: "get", _target: [{ _ref: "layer", _id: id }] })));
+  return described.map((d) => {
+    const { _obj, ...lock } = d.layerLocking || {};
+    return lock;
+  });
+}
+
+// Gives many layers the same locks in one step: selects them all, then locks the selection. On a big
+// document every lock change can take seconds (TMLS047: about 5 s each, 17 minutes in all), so one
+// change per board instead of one per layer matters. If Photoshop refuses the group, it goes layer by layer.
+async function setLockMany(ids, lock) {
+  if (!ids.length) return;
+  if (ids.length === 1) return setLock(ids[0], lock);
+  try {
+    await selectLayers(ids);
+    await play([{ _obj: "applyLocking", _target: [HERE], layerLocking: { _obj: "layerLocking", ...lock } }]);
+  } catch (e) {
+    for (const id of ids) await setLock(id, lock);
+  }
+}
+
 // Wraps the selected layers. There can't be a Background among them.
 const makeArtboard = (name, rect) => play([{
   _obj: "make",
@@ -192,6 +216,8 @@ module.exports = {
   unlock,
   lockNesting,
   setNestingLock,
+  locksOf,
+  setLockMany,
   makeArtboard,
   duplicateArtboard,
   artboardInfo,

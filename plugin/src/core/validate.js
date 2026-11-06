@@ -27,7 +27,16 @@ function validateInputs(inputs, exists) {
 }
 
 // Photoshop can't open a document tab while minimized, and its own message points at the wrong setting.
-function explainError(message) {
+// Takes a thrown value or its message. Photoshop sometimes throws with no message at all, which used to
+// show up in the report as "undefined".
+function explainError(error) {
+  let message = error && typeof error === "object" ? error.message : error;
+  if (!message && error && typeof error === "object") {
+    const text = String(error);
+    if (text && text !== "[object Object]" && text !== "Error") message = text;
+  }
+  if (!message) return "Photoshop stopped with an error but didn't say what it was.";
+  message = String(message);
   if (/enough room to dock/i.test(message)) {
     return "Photoshop can't open another document while its window is minimized. Restore the window and build again.";
   }

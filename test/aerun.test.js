@@ -39,6 +39,16 @@ test("batch file waits for the project window, because AE's loading windows appe
   assert.ok(!lines.some((l) => /Adobe After Effects"/.test(l)), "doesn't accept any window with AE's name");
 });
 
+test("batch file waits until AE answers, because a loading AE already shows Untitled Project.aep", () => {
+  const lines = batchFileText(AFX, SCRIPT, STARTED).split("\r\n");
+  const check = lines.findIndex((l) => /tasklist\.exe" \/V/.test(l) && /find\.exe" \/I "\.aep"/.test(l));
+  assert.match(lines[check], /\/FI "STATUS ne NOT RESPONDING"/, "skips a window that isn't responding");
+  assert.ok(lines.includes("if %steady% geq 3 goto ready"), "needs three good checks in a row");
+  const reset = lines.indexOf("set /a steady=0", lines.indexOf(":notyet"));
+  assert.ok(reset > lines.indexOf(":notyet"), "a bad check starts the count again");
+  assert.ok(lines.indexOf(":ready") > lines.indexOf("if %steady% geq 3 goto ready"));
+});
+
 test("batch file also waits when AE is already running, since it may still be loading", () => {
   const lines = batchFileText(AFX, SCRIPT, STARTED).split("\r\n");
   const running = lines.findIndex((l) => /find\.exe" \/I "AfterFX\.exe"/.test(l));

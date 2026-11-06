@@ -42,9 +42,11 @@ async function wrapInArtboard(doc) {
   return Array.from(doc.layers).find((l) => l.name === WRAP_NAME).id;
 }
 
+const allIds = (layers) => Array.from(layers).flatMap((l) => [l.id, ...(l.layers ? allIds(l.layers) : [])]);
+
+// Expects every layer to be unlocked already (see makeMaster).
 async function prepareLayers(layers, issues) {
   for (const layer of Array.from(layers)) {
-    await a.unlock(layer.id);
     if (layer.layers) {
       await prepareLayers(layer.layers, issues);
     } else if (String(layer.kind) === "pixel" && a.boundsOf(layer)) {
@@ -85,9 +87,7 @@ async function convertFills(layers, issues) {
 async function makeMaster(doc, source, rectsInUse, issues) {
   const id = await a.duplicateArtboard(source.id, MASTER_NAME);
   const { rect } = await a.artboardInfo(id);
-  const lock = async () => {
-    for (const layer of Array.from(topLayer(doc, id).layers)) await a.lockNesting(layer.id);
-  };
+  const lock = () => a.setLockMany(Array.from(topLayer(doc, id).layers).map((l) => l.id), { protectArtboardAutonest: true });
 
   await lock();
   await a.moveArtboard(id, source.bounds.left - rect.left, source.bounds.top - rect.top);
@@ -96,6 +96,7 @@ async function makeMaster(doc, source, rectsInUse, issues) {
   // Then off to one side, below everything, while the boards get made.
   const lowest = Math.max(...rectsInUse.map((r) => r.bottom));
   await a.moveArtboard(id, 0, lowest + 1000 - source.bounds.top);
+  await a.setLockMany(allIds(topLayer(doc, id).layers), { protectNone: true });
   await prepareLayers(topLayer(doc, id).layers, issues);
   await lock();
   return id;
@@ -160,29 +161,42 @@ async function buildBoard(doc, def, { masterId, rect, source, look, picks, issue
   return { id, name: def.name, rect };
 }
 
-// Existing boards keep their layers while new boards appear and move around. Returns what to undo.
+// Existing boards keep their layers while new boards appear and move around. Layers that already have
+// the same locks are changed together, in one step. Returns what to put back: [{ ids, lock }].
 async function guardExisting(doc, boards) {
-  const guarded = [];
-  for (const board of boards) {
-    for (const layer of Array.from(topLayer(doc, board.id).layers)) {
-      const lock = (await a.describeLayer(layer.id)).layerLocking;
-      if (lock.protectArtboardAutonest || lock.protectAll) continue;
-      await a.setNestingLock(layer.id, true);
-      guarded.push(layer.id);
-    }
-  }
-  return guarded;
+  const ids = boards.flatMap((b) => Array.from(topLayer(doc, b.id).layers).map((l) => l.id));
+  const locks = await a.locksOf(ids);
+  const groups = new Map();
+  ids.forEach((id, i) => {
+    const lock = locks[i];
+    if (lock.protectArtboardAutonest || lock.protectAll) return;
+    const key = JSON.stringify(lock);
+    if (!groups.has(key)) groups.set(key, { ids: [], lock });
+    groups.get(key).ids.push(id);
+  });
+  for (const { ids: same, lock } of groups.values()) await a.setLockMany(same, { ...lock, protectArtboardAutonest: true });
+  return [...groups.values()];
+}
+
+// Puts back exactly the locks the existing layers had before the build.
+async function releaseExisting(guarded) {
+  for (const { ids, lock } of guarded) await a.setLockMany(ids, lock);
 }
 
 // Copies come out unlocked. Photoshop would later pull a layer off its board if it's outside the
 // board, hidden or has no shape of its own, so those keep the nesting lock. It blocks nothing else.
+// Two lock changes for all the boards together, not two per layer.
 async function finishBoards(doc, made) {
+  const all = [];
+  const keep = [];
   for (const { id, rect } of made) {
     for (const layer of Array.from(topLayer(doc, id).layers)) {
-      await a.unlock(layer.id);
-      if (!layer.visible || !overlaps(a.boundsOf(layer), rect)) await a.lockNesting(layer.id);
+      all.push(layer.id);
+      if (!layer.visible || !overlaps(a.boundsOf(layer), rect)) keep.push(layer.id);
     }
   }
+  await a.setLockMany(all, { protectNone: true });
+  await a.setLockMany(keep, { protectArtboardAutonest: true });
 }
 
 async function build(doc, { sourceId, textIds, logoIds, font, flyer, banner }, onProgress, onStage, timings) {
@@ -229,8 +243,8 @@ async function buildAll(doc, { sourceId, textIds, logoIds, font, templatePaths, 
   const inUse = boards.flatMap((b) => [b.bounds, ...Array.from(topLayer(doc, b.id).layers).map(a.boundsOf).filter(Boolean)]);
   const rects = placeRow(inUse, missing.map((b) => ({ width: b.width || srcW, height: b.height || srcH })));
   const { look } = await a.artboardInfo(source.id);
-  const guarded = await guardExisting(doc, boards);
-  const masterId = await makeMaster(doc, source, [...inUse, ...rects], issues);
+  const guarded = await timed(timings, "guardExisting", () => guardExisting(doc, boards));
+  const masterId = await timed(timings, "makeMaster", () => makeMaster(doc, source, [...inUse, ...rects], issues));
 
   if (!font && missing.some((b) => b.template && templatePaths[b.template])) {
     issues.push("Your Text picks have no live text, so COMING SOON, OUT NOW and OUT NOW ON TIMELESS keep the template font.");
@@ -239,17 +253,17 @@ async function buildAll(doc, { sourceId, textIds, logoIds, font, templatePaths, 
   const made = [];
   for (let i = 0; i < missing.length; i++) {
     const def = missing[i];
+    const started = Date.now();
     made.push(await buildBoard(doc, def, { masterId, rect: rects[i], source, look, picks: { text: text.paths, logo: logo.paths }, issues, font, templatePaths, templates }));
     built.push(def.name);
+    timings["board " + def.name] = Date.now() - started;
     await onProgress(def.name, i + 1, missing.length);
   }
   // TMLS047 sat here for 20 minutes where TMLS043 took 9 s, so each step is timed for the report.
   await onStage("Finishing up");
   await timed(timings, "deleteMaster", () => a.deleteLayers([masterId]));
   await timed(timings, "finishBoards", () => finishBoards(doc, made));
-  await timed(timings, "releaseLocks", async () => {
-    for (const id of guarded) await a.setNestingLock(id, false);
-  });
+  await timed(timings, "releaseLocks", () => releaseExisting(guarded));
   return { built, skipped, issues, sourceId: source.id, boards: made };
 }
 

@@ -28,7 +28,7 @@ async function runBuild(inputs, onProgress = () => {}, options = {}) {
       (stage) => onProgress(stage, 63)
     );
   } catch (e) {
-    report.issues.push(`The artboards couldn't be built, so the PSD wasn't changed: ${explainError(e.message)}`);
+    report.issues.push(`The artboards couldn't be built, so the PSD wasn't changed: ${explainError(e)}`);
     return report;
   }
   report.built = boards.built;
@@ -42,7 +42,7 @@ async function runBuild(inputs, onProgress = () => {}, options = {}) {
     const folder = await ensureFolder(`${dir}\\${assetsFolder(aepBase)}`);
     images = await exportHelpers(doc, folder, { sourceId: boards.sourceId, textIds });
   } catch (e) {
-    report.issues.push(`The artboards are built, but the images for After Effects couldn't be saved: ${explainError(e.message)}`);
+    report.issues.push(`The artboards are built, but the images for After Effects couldn't be saved: ${explainError(e)}`);
     return report;
   }
 
