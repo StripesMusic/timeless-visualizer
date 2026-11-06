@@ -96,3 +96,15 @@ test("explainError leaves other messages alone", () => {
   const { explainError } = require("../plugin/src/core/validate");
   assert.equal(explainError("Can't open the template: C:\\x.psd"), "Can't open the template: C:\\x.psd");
 });
+
+test("explainError never reports an error as undefined", () => {
+  const { explainError } = require("../plugin/src/core/validate");
+  const silent = "Photoshop stopped with an error but didn't say what it was.";
+  assert.equal(explainError(new Error()), silent);
+  assert.equal(explainError(undefined), silent);
+  assert.equal(explainError({}), silent);
+  assert.equal(explainError({ message: "" }), silent);
+  assert.equal(explainError(new Error("Disk full")), "Disk full");
+  assert.equal(explainError("Disk full"), "Disk full");
+  assert.equal(explainError({ toString: () => "Code -25920" }), "Code -25920");
+});

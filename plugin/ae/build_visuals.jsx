@@ -160,9 +160,11 @@
         canvas.layers.add(flyer);
         canvas.layers.add(importStill(S.images.canvasText, "CanvasText", assets), canvas.duration);
 
+        // Opening a comp in the viewer marks the project changed, so it happens before the save.
+        // Otherwise the next release built in this AE session is refused for "unsaved changes".
+        flyer.openInViewer();
         var output = new File(S.outputPath);
         app.project.save(output);
-        flyer.openInViewer();
         return output.fsName;
     }
 

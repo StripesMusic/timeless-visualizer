@@ -4,6 +4,7 @@ const uxp = require("uxp");
 const { app, core, imaging } = require("photoshop");
 const { unionBounds, boxWidth, boxHeight } = require("../core/geometry");
 const { resolvePicks } = require("../core/picks");
+const { explainError } = require("../core/validate");
 const { listArtboards } = require("./doc");
 const a = require("./actions");
 
@@ -133,6 +134,15 @@ function canvasLayers(board, source, textIds) {
   return [...adjustments, ...ordered];
 }
 
+// Names the image that failed, so a report says more than Photoshop's message (which can be empty).
+async function saving(name, step) {
+  try {
+    return await step();
+  } catch (e) {
+    throw new Error(`${name}: ${explainError(e)}`);
+  }
+}
+
 async function exportHelpers(doc, folder, { sourceId, textIds }) {
   const out = {};
   await core.executeAsModal(
@@ -145,12 +155,12 @@ async function exportHelpers(doc, folder, { sourceId, textIds }) {
       const coming = boardOf(doc, boards, COMING_SOON_BOARD);
       const outNow = boardOf(doc, boards, OUT_NOW_BOARD);
 
-      out.coverArt = await saveComposite(doc, source.bounds, folder, "CoverArt.jpg");
-      out.bgPortrait = await saveComposite(doc, boardOf(doc, boards, "BGPortrait").rect, folder, "BGPortrait.jpg");
+      out.coverArt = await saving("CoverArt.jpg", () => saveComposite(doc, source.bounds, folder, "CoverArt.jpg"));
+      out.bgPortrait = await saving("BGPortrait.jpg", () => saveComposite(doc, boardOf(doc, boards, "BGPortrait").rect, folder, "BGPortrait.jpg"));
       // After Effects adds its own shadows to these two, so they're saved without the layer's.
-      out.comingSoonText = await saveLayers(doc, [wordLayer(coming, "COMING SOON", COMING_SOON_BOARD)], coming.rect, folder, "ComingSoonText.png", { withoutEffects: true });
-      out.outNowText = await saveLayers(doc, [wordLayer(outNow, "OUT NOW", OUT_NOW_BOARD)], outNow.rect, folder, "OutNowText.png", { withoutEffects: true });
-      out.canvasText = await saveLayers(doc, canvasLayers(coming, sourceLayer, textIds), coming.rect, folder, "CanvasText.png");
+      out.comingSoonText = await saving("ComingSoonText.png", () => saveLayers(doc, [wordLayer(coming, "COMING SOON", COMING_SOON_BOARD)], coming.rect, folder, "ComingSoonText.png", { withoutEffects: true }));
+      out.outNowText = await saving("OutNowText.png", () => saveLayers(doc, [wordLayer(outNow, "OUT NOW", OUT_NOW_BOARD)], outNow.rect, folder, "OutNowText.png", { withoutEffects: true }));
+      out.canvasText = await saving("CanvasText.png", () => saveLayers(doc, canvasLayers(coming, sourceLayer, textIds), coming.rect, folder, "CanvasText.png"));
     },
     { commandName: "Timeless Visualizer images" }
   );

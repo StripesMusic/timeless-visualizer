@@ -209,7 +209,7 @@ function createPanel(root, services) {
     try {
       report = await services.runBuild(current, onProgress);
     } catch (e) {
-      report = { ok: false, built: [], skipped: [], aepPath: null, issues: [explainError(e.message)] };
+      report = { ok: false, built: [], skipped: [], aepPath: null, issues: [explainError(e)] };
     }
     state.busy = false;
     el("progress").classList.add("hidden");

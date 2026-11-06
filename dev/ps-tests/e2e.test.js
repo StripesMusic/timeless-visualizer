@@ -111,25 +111,29 @@ async function runOne(spec, arg, ctx, t) {
     spec.logo.forEach((n) => { const l = inList(source.layers, n); l.visible = spec.hiddenLogo ? false : true; });
   });
 
-  // What AE has linked.
-  const dataFile = native(dir + "/readback.txt");
-  if (exists(dataFile)) await fs.unlink(url(dataFile));
-  await runInAfterEffects(arg.aePath, `(function(){
-    var out=new File(${asciiJson(dataFile)});out.encoding="UTF-8";out.open("w");
-    out.writeln("PROJECT="+app.project.file.fsName);
-    for(var i=1;i<=app.project.numItems;i++){var it=app.project.item(i);
-      if(it instanceof CompItem)out.writeln("COMP "+it.name+" "+it.width+"x"+it.height+" "+it.duration);
-      if(it instanceof FootageItem&&it.file)out.writeln("FILE "+it.name+"="+it.file.fsName);}
-    out.writeln("QUEUE="+app.project.renderQueue.numItems);
-    out.close();
-  })();`, () => (exists(dataFile) ? "done" : null), { timeoutMs: 120000 });
-  const lines = exists(dataFile) ? fs.readFileSync(url(dataFile), { encoding: "utf-8" }) : "";
-  log(lines);
-  check(spec.label + ": AE has this project open", lines.includes(report.aepPath), lines.slice(0, 200));
-  const files = lines.split(/\r?\n/).filter((l) => l.startsWith("FILE "));
-  const assetsDir = report.aepPath.replace(/\.aep$/, "") + " Assets";
-  check(spec.label + ": every linked file is this release's", files.length >= 5 && files.every((l) => l.includes(assetsDir)), files);
-  check(spec.label + ": nothing is left in the render queue", lines.includes("QUEUE=0"));
+  // What AE has linked. Without an AEP there's nothing to read back, but the save below still runs.
+  if (report.aepPath) {
+    const dataFile = native(dir + "/readback.txt");
+    if (exists(dataFile)) await fs.unlink(url(dataFile));
+    await runInAfterEffects(arg.aePath, `(function(){
+      var out=new File(${asciiJson(dataFile)});out.encoding="UTF-8";out.open("w");
+      out.writeln("PROJECT="+app.project.file.fsName);
+      for(var i=1;i<=app.project.numItems;i++){var it=app.project.item(i);
+        if(it instanceof CompItem)out.writeln("COMP "+it.name+" "+it.width+"x"+it.height+" "+it.duration);
+        if(it instanceof FootageItem&&it.file)out.writeln("FILE "+it.name+"="+it.file.fsName);}
+      out.writeln("QUEUE="+app.project.renderQueue.numItems);
+      out.close();
+    })();`, () => (exists(dataFile) ? "done" : null), { timeoutMs: 120000 });
+    const lines = exists(dataFile) ? fs.readFileSync(url(dataFile), { encoding: "utf-8" }) : "";
+    log(lines);
+    check(spec.label + ": AE has this project open", lines.includes(report.aepPath), lines.slice(0, 200));
+    const files = lines.split(/\r?\n/).filter((l) => l.startsWith("FILE "));
+    const assetsDir = report.aepPath.replace(/\.aep$/, "") + " Assets";
+    check(spec.label + ": every linked file is this release's", files.length >= 5 && files.every((l) => l.includes(assetsDir)), files);
+    check(spec.label + ": nothing is left in the render queue", lines.includes("QUEUE=0"));
+  } else {
+    check(spec.label + ": AE has this project open", false, "no AEP was made");
+  }
 
   // Saving, as a copy, to see the real file size. Photoshop refuses a PSD over its 2 GB limit.
   const savedName = spec.path.replace(/^.*[\/]/, "").replace(/.psd$/, "_saved.psd");
@@ -146,18 +150,24 @@ async function runOne(spec, arg, ctx, t) {
   });
   check(spec.label + ": the PSD can be saved as a PSD", !savedError, savedError);
   const size = (await entry.getMetadata()).size;
+  check(spec.label + ": the saved PSD is under 2 GB", !savedError && size < 2 * 1024 * 1024 * 1024, Math.round(size / 1048576) + " MB");
   log("saved size " + Math.round(size / 1048576) + " MB, source was " + Math.round(fs.lstatSync(url(spec.path)).size / 1048576) + " MB");
   if (!savedError) await entry.delete();
 
-  // Build again: nothing is rebuilt, and the AEP is left alone.
-  const stamp = String(fs.lstatSync(url(report.aepPath)).mtime);
-  const again = await runBuild(
-    { doc, sourceId: source.id, textIds, logoIds, font: fonts[0] || null, date: "28 AUG 2026", audio: {}, templates: arg.templates, aePath: arg.aePath },
-    () => {},
-    { aeSource: "" }
-  );
-  check(spec.label + ": building again adds nothing", again.built.length === 0 && again.skipped.length === 7, again);
-  check(spec.label + ": building again leaves the AEP alone", again.ok && String(fs.lstatSync(url(report.aepPath)).mtime) === stamp && again.issues.some((s) => /left as is/.test(s)), again);
+  // Build again: nothing is rebuilt, and the AEP is left alone. Without an AEP a rebuild would start a
+  // real AE build, so it's skipped and the failure above stands.
+  if (report.aepPath) {
+    const stamp = String(fs.lstatSync(url(report.aepPath)).mtime);
+    const again = await runBuild(
+      { doc, sourceId: source.id, textIds, logoIds, font: fonts[0] || null, date: "28 AUG 2026", audio: {}, templates: arg.templates, aePath: arg.aePath },
+      () => {},
+      { aeSource: "" }
+    );
+    check(spec.label + ": building again adds nothing", again.built.length === 0 && again.skipped.length === 7, again);
+    check(spec.label + ": building again leaves the AEP alone", again.ok && String(fs.lstatSync(url(report.aepPath)).mtime) === stamp && again.issues.some((s) => /left as is/.test(s)), again);
+  } else {
+    log("no AEP, so the rebuild check was skipped");
+  }
 
   await kit.closeDoc(doc);
 }
