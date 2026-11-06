@@ -15,11 +15,21 @@ function suite(log) {
 
 const modal = (fn) => core.executeAsModal(fn, { commandName: "TV test" });
 
+// Closes an open copy of this exact file first. Matched by full path, never by name, because a test copy
+// can share its filename with one of the user's real files.
 async function openFresh(path) {
   let doc;
+  const want = path.replace(/\//g, "\\").toLowerCase();
   await modal(async () => {
-    const name = path.replace(/^.*[\\/]/, "");
-    for (const d of app.documents.slice()) if (d.name === name) await d.closeWithoutSaving();
+    for (const d of app.documents.slice()) {
+      let open = "";
+      try {
+        open = String(d.path || "").replace(/\//g, "\\").toLowerCase();
+      } catch (e) {
+        open = "";
+      }
+      if (open && open === want) await d.closeWithoutSaving();
+    }
     doc = await app.open(await uxp.storage.localFileSystem.getEntryWithUrl("file:" + path));
   });
   return doc;
