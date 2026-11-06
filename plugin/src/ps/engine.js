@@ -185,7 +185,9 @@ async function releaseExisting(guarded) {
 
 // Copies come out unlocked. Photoshop would later pull a layer off its board if it's outside the
 // board, hidden or has no shape of its own, so those keep the nesting lock. It blocks nothing else.
-// Two lock changes for all the boards together, not two per layer.
+// Two lock changes for all the boards together, not two per layer. The layers that keep the nesting
+// lock get their final locks first and are never unlocked on the way: unlocked even for one step,
+// Photoshop sorts them into other boards (and moved the source with them).
 async function finishBoards(doc, made) {
   const all = [];
   const keep = [];
@@ -195,8 +197,9 @@ async function finishBoards(doc, made) {
       if (!layer.visible || !overlaps(a.boundsOf(layer), rect)) keep.push(layer.id);
     }
   }
-  await a.setLockMany(all, { protectNone: true });
-  await a.setLockMany(keep, { protectArtboardAutonest: true });
+  const kept = new Set(keep);
+  await a.setLockMany(keep, { protectTransparency: false, protectComposite: false, protectPosition: false, protectAll: false, protectArtboardAutonest: true });
+  await a.setLockMany(all.filter((id) => !kept.has(id)), { protectNone: true });
 }
 
 async function build(doc, { sourceId, textIds, logoIds, font, flyer, banner }, onProgress, onStage, timings) {

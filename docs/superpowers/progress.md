@@ -81,3 +81,4 @@ Follow-up code (cloud, node 76/76, not yet run in Photoshop):
 - explainError never says "undefined"; exportHelpers names the image that failed.
 - Launcher: waits until AE's project window is there and not "Not Responding" on three checks in a row before sending the script.
 Next on the PC: engine.test.js (lock checks), then e2e TMLS047 with AE warm, TMLS043 with Text = Group 1 only.
+2026-11-06 PC: engine.test.js on 390ed02 failed 27 of 134 (f12ccb9 passes 134/134). Cause: the grouped finishBoards unlocked every new-board layer first, and in that moment Photoshop re-sorted the layers that should keep the nesting lock into other boards, and shifted the source 1028 px down. Ruling: those layers now get their final locks first and are never unlocked; then the rest are unlocked. Passed 134/134 in a scratch copy on the PC. Grouped locks in makeMaster and guardExisting were fine.
