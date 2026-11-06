@@ -2,13 +2,17 @@
 // shifts by mean 2.03, worst 20). Read-only on the source: it only toggles visibility on a scratch copy,
 // puts it back, and closes the copy without saving.
 // node dev/ps.js dev/ps-tests/source-diff.js "$(cat source-diff-arg.json)" --timeout=2400
-// arg: {path, source, text:[names], logo:[names], templates:{flyer, banner}, size?: 512}
+// arg: {path, source, text:[names], logo:[names], templates:{flyer, banner}, size?: 512,
+//       passes?: ["grow", "reopen", "build"], progressFile?: "C:\\...\\source-diff.log"}
+// Each pass renders every layer, which is slow on a big file (TMLS047 at Idle: well over an hour for
+// all three), so `passes` picks which run, and `progressFile` gets each line as it happens.
 //
 // Three passes over the same scratch copy, each rendering every source layer on its own:
 //   before  - as opened
 //   grown   - after two copies of the source board are added far right and far below, the way the
 //             build grows the document, then deleted again. Tells "the document grew" from "the build".
 //   built   - after a fresh open and a real buildArtboards (no After Effects)
+const fs = require("fs");
 const { app } = require("photoshop");
 const kit = require("./kit");
 const a = require("../../plugin/src/ps/actions");
@@ -67,13 +71,50 @@ function compare(label, a, b, log) {
 
 exports.run = async (arg, ctx) => {
   const size = arg.size || 512;
-  const log = ctx.log;
+  const passes = new Set(arg.passes || ["grow", "reopen", "build"]);
+  const lines = [];
+  const log = (line) => {
+    ctx.log(line);
+    if (!arg.progressFile) return;
+    lines.push(new Date().toISOString().slice(11, 19) + " " + line);
+    try {
+      fs.writeFileSync("file:" + arg.progressFile.replace(/\\/g, "/"), lines.join("\n") + "\n", { encoding: "utf-8" });
+    } catch (e) {
+      // A progress file is a nicety; the result still comes back at the end.
+    }
+  };
   const result = {};
+  log("passes " + [...passes].join(", ") + ", size " + size);
 
-  // Pass 1 and 2: grow the document without building.
   let doc = await kit.openFresh(arg.path);
   const before = await scan(doc, arg.source, size);
   log("scanned " + Object.keys(before.layers).length + " layers before");
+  if (passes.has("grow")) await growPass(doc, arg, size, before, result, log);
+  await kit.closeDoc(doc);
+
+  // A fresh open, then (optionally) a real artboard build.
+  if (!passes.has("reopen") && !passes.has("build")) return result;
+  doc = await kit.openFresh(arg.path);
+  const fresh = passes.has("reopen") ? await scan(doc, arg.source, size) : before;
+  if (passes.has("reopen")) result.reopen = compare("fresh reopen, nothing done (noise floor)", before, fresh, log);
+  if (passes.has("build")) {
+    const source = byName(doc, arg.source);
+    const textIds = (arg.text || []).map((n) => inList(source.layers, n).id);
+    const logoIds = (arg.logo || []).map((n) => inList(source.layers, n).id);
+    log("building");
+    const report = await buildArtboards({ doc, sourceId: source.id, textIds, logoIds, font: null, flyer: arg.templates.flyer, banner: arg.templates.banner });
+    log("built " + JSON.stringify(report.built) + " issues " + JSON.stringify(report.issues));
+    const built = await scan(doc, arg.source, size);
+    result.built = compare("after buildArtboards", fresh, built, log);
+  }
+  await kit.closeDoc(doc);
+
+  log("open documents now: " + Array.from(app.documents).map((d) => d.name).join(", "));
+  return result;
+};
+
+// Grows the document the way the build does, without building, then shrinks it back.
+async function growPass(doc, arg, size, before, result, log) {
   const sourceId = byName(doc, arg.source).id;
   const all = listArtboards(doc);
   const right = Math.max(...all.map((b) => b.bounds.right));
@@ -107,21 +148,4 @@ exports.run = async (arg, ctx) => {
   });
   const shrunk = await scan(doc, arg.source, size);
   result.shrunk = compare("probe boards deleted again", before, shrunk, log);
-  await kit.closeDoc(doc);
-
-  // Pass 3: a real artboard build on a fresh open.
-  doc = await kit.openFresh(arg.path);
-  const fresh = await scan(doc, arg.source, size);
-  result.reopen = compare("fresh reopen, nothing done (noise floor)", before, fresh, log);
-  const source = byName(doc, arg.source);
-  const textIds = (arg.text || []).map((n) => inList(source.layers, n).id);
-  const logoIds = (arg.logo || []).map((n) => inList(source.layers, n).id);
-  const report = await buildArtboards({ doc, sourceId: source.id, textIds, logoIds, font: null, flyer: arg.templates.flyer, banner: arg.templates.banner });
-  log("built " + JSON.stringify(report.built) + " issues " + JSON.stringify(report.issues));
-  const built = await scan(doc, arg.source, size);
-  result.built = compare("after buildArtboards", fresh, built, log);
-  await kit.closeDoc(doc);
-
-  log("open documents now: " + Array.from(app.documents).map((d) => d.name).join(", "));
-  return result;
-};
+}
