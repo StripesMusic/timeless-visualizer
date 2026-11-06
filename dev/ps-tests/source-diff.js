@@ -3,7 +3,10 @@
 // puts it back, and closes the copy without saving.
 // node dev/ps.js dev/ps-tests/source-diff.js "$(cat source-diff-arg.json)" --timeout=2400
 // arg: {path, source, text:[names], logo:[names], templates:{flyer, banner}, size?: 512,
-//       passes?: ["grow", "reopen", "build"], progressFile?: "C:\\...\\source-diff.log"}
+//       passes?: ["grow", "reopen", "build", "stack"], progressFile?: "C:\\...\\source-diff.log"}
+// "stack" (fast, no build) lists every source layer's blend mode, effects and smart filters, then adds
+// the layers back one at a time from the bottom, on the normal and the grown canvas, and marks where
+// the two first differ. Use passes: ["stack"] for that alone.
 // Each pass renders every layer, which is slow on a big file (TMLS047 at Idle: well over an hour for
 // all three), so `passes` picks which run, and `progressFile` gets each line as it happens.
 //
@@ -86,14 +89,27 @@ exports.run = async (arg, ctx) => {
   const result = {};
   log("passes " + [...passes].join(", ") + ", size " + size);
 
-  let doc = await kit.openFresh(arg.path);
-  const before = await scan(doc, arg.source, size);
-  log("scanned " + Object.keys(before.layers).length + " layers before");
+  let doc;
+  let before = null;
+  if (passes.has("grow") || passes.has("reopen") || passes.has("build")) {
+    doc = await kit.openFresh(arg.path);
+    before = await scan(doc, arg.source, size);
+    log("scanned " + Object.keys(before.layers).length + " layers before");
+  }
   if (passes.has("grow")) await growPass(doc, arg, size, before, result, log);
-  await kit.closeDoc(doc);
+  if (doc) await kit.closeDoc(doc);
+
+  if (passes.has("stack")) {
+    doc = await kit.openFresh(arg.path);
+    await stackPass(doc, arg, size, result, log);
+    await kit.closeDoc(doc);
+  }
 
   // A fresh open, then (optionally) a real artboard build.
-  if (!passes.has("reopen") && !passes.has("build")) return result;
+  if (!passes.has("reopen") && !passes.has("build")) {
+    log("open documents now: " + Array.from(app.documents).map((d) => d.name).join(", "));
+    return result;
+  }
   doc = await kit.openFresh(arg.path);
   const fresh = passes.has("reopen") ? await scan(doc, arg.source, size) : before;
   if (passes.has("reopen")) result.reopen = compare("fresh reopen, nothing done (noise floor)", before, fresh, log);
@@ -113,8 +129,9 @@ exports.run = async (arg, ctx) => {
   return result;
 };
 
-// Grows the document the way the build does, without building, then shrinks it back.
-async function growPass(doc, arg, size, before, result, log) {
+// Grows the document the way the build does (a copy of the source board far right and one far below),
+// without building. Returns a function that shrinks it back and restores the source's locks.
+async function growDoc(doc, arg) {
   const sourceId = byName(doc, arg.source).id;
   const all = listArtboards(doc);
   const right = Math.max(...all.map((b) => b.bounds.right));
@@ -138,14 +155,109 @@ async function growPass(doc, arg, size, before, result, log) {
     await place("TV Probe Right", right + 2000, src.top);
     await place("TV Probe Below", src.left, bottom + 2000);
   });
+  return () =>
+    kit.modal(async () => {
+      await a.deleteLayers(probes);
+      for (let i = 0; i < sourceKids.length; i++) {
+        if (!savedLocks[i].protectAll) await a.setNestingLock(sourceKids[i], !!savedLocks[i].protectArtboardAutonest);
+      }
+    });
+}
+
+async function growPass(doc, arg, size, before, result, log) {
+  const shrink = await growDoc(doc, arg);
   const grown = await scan(doc, arg.source, size);
   result.grown = compare("document grown (probe boards present)", before, grown, log);
-  await kit.modal(async () => {
-    await a.deleteLayers(probes);
-    for (let i = 0; i < sourceKids.length; i++) {
-      if (!savedLocks[i].protectAll) await a.setNestingLock(sourceKids[i], !!savedLocks[i].protectArtboardAutonest);
-    }
-  });
+  await shrink();
   const shrunk = await scan(doc, arg.source, size);
   result.shrunk = compare("probe boards deleted again", before, shrunk, log);
+}
+
+// What each source layer is and does, so a culprit can be read off the list.
+async function describeLayers(layers, log, path = []) {
+  for (const l of Array.from(layers)) {
+    const d = await kit.describe(l.id);
+    const so = d.smartObject || d.smartObjectMore;
+    const info = {
+      kind: String(l.kind),
+      blend: String(l.blendMode),
+      opacity: Math.round(l.opacity),
+      fill: d.fillOpacity !== undefined ? Math.round((d.fillOpacity / 255) * 100) : undefined,
+      visible: l.visible,
+      clipped: l.isClippingMask,
+      effects: d.layerEffects ? Object.keys(d.layerEffects).filter((k) => k !== "_obj" && k !== "scale") : [],
+      smartFilters: so && so.filterFX ? so.filterFX.map((f) => (f.filter && f.filter._obj) || f.name) : [],
+      adjustment: d.adjustment ? d.adjustment.map((x) => x._obj) : undefined,
+      blendIf: !!d.blendRange,
+      knockout: d.knockout ? d.knockout._value : undefined,
+    };
+    log("   layer " + [...path, l.name].join(" / ") + " " + JSON.stringify(info));
+    if (l.layers) await describeLayers(l.layers, log, [...path, l.name]);
+  }
+}
+
+// Shows the layers of `list` from the bottom up, one more each step, and renders each step.
+// `ctxShow` sets everything outside `list` first (and is undone by the caller).
+async function stackScan(doc, rect, list, size) {
+  const saved = list.map((l) => l.visible);
+  const steps = [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    await kit.modal(async () => {
+      list.forEach((l, j) => { l.visible = j >= i ? saved[j] : false; });
+    });
+    steps.push({ name: list[i].name, index: i, px: await kit.pixels(doc, rect, size) });
+  }
+  await kit.modal(async () => {
+    list.forEach((l, j) => { l.visible = saved[j]; });
+  });
+  return steps;
+}
+
+function compareSteps(label, a, b, log) {
+  log(`== ${label} (bottom layer first; each row adds one layer on top):`);
+  let first = null;
+  let prev = 0;
+  for (let k = 0; k < a.length; k++) {
+    const d = kit.difference(a[k].px, b[k].px);
+    const jump = d.mean - prev;
+    log(`   +${a[k].name}: mean ${d.mean.toFixed(3)} worst ${d.worst}${jump > 0.1 ? "   <-- jumps here" : ""}`);
+    if (first === null && jump > 0.1) first = a[k];
+    prev = d.mean;
+  }
+  return first;
+}
+
+// Finds where the difference first appears: the stack built up bottom first, normal vs grown canvas,
+// then the same inside the group where it appears.
+async function stackPass(doc, arg, size, result, log) {
+  const board = byName(doc, arg.source);
+  const rect = listArtboards(doc).find((b) => b.id === board.id).bounds;
+  log("canvas " + doc.width + "x" + doc.height);
+  await describeLayers(board.layers, log);
+  const top = Array.from(board.layers);
+  const normal = await stackScan(doc, rect, top, size);
+  const shrink = await growDoc(doc, arg);
+  log("grown canvas " + doc.width + "x" + doc.height);
+  const grown = await stackScan(doc, rect, top, size);
+  const culprit = compareSteps("top level", normal, grown, log);
+  result.stack = { topLevel: culprit ? culprit.name : null };
+  const group = culprit && top[culprit.index].layers ? top[culprit.index] : null;
+  if (group) {
+    // Everything above the group hidden, the group and what's under it as they are; then inside the group.
+    const saved = top.map((l) => l.visible);
+    await kit.modal(async () => {
+      top.forEach((l, j) => { if (j < culprit.index) l.visible = false; });
+    });
+    const kids = Array.from(group.layers);
+    const grownKids = await stackScan(doc, rect, kids, size);
+    await shrink();
+    const normalKids = await stackScan(doc, rect, kids, size);
+    const inner = compareSteps("inside " + group.name, normalKids, grownKids, log);
+    result.stack.inGroup = inner ? inner.name : null;
+    await kit.modal(async () => {
+      top.forEach((l, j) => { l.visible = saved[j]; });
+    });
+  } else {
+    await shrink();
+  }
 }
