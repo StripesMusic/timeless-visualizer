@@ -4,6 +4,7 @@ const path = require("node:path");
 const zlib = require("node:zlib");
 
 const PLUGIN = path.join(__dirname, "..", "plugin");
+const DOS_DATE = (0 << 9) | (1 << 5) | 1; // 1980-01-01 in MS-DOS date format
 
 function listFiles(dir, prefix = "") {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -24,6 +25,7 @@ function zip(files) {
     shared.writeUInt16LE(20, 0); // version needed
     shared.writeUInt16LE(0x0800, 2); // names are UTF-8
     shared.writeUInt16LE(8, 4); // deflate
+    shared.writeUInt16LE(DOS_DATE, 8); // a real date: 1 Jan 1980, not the invalid all-zero one
     shared.writeUInt32LE(crc, 10);
     shared.writeUInt32LE(packed.length, 14);
     shared.writeUInt32LE(data.length, 18);
