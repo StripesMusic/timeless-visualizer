@@ -18,6 +18,29 @@ test("the manifest is at the root, with the right id and name", () => {
   assert.equal(manifest.version, "1.0.0");
 });
 
+test("the manifest names one host as an object, which Creative Cloud needs to install a .ccx", () => {
+  // An array of hosts only works when loading for development. Creative Cloud rejects it with error -4.
+  const manifest = JSON.parse(entries().get("manifest.json").toString("utf8"));
+  assert.ok(!Array.isArray(manifest.host));
+  assert.equal(manifest.host.app, "PS");
+  assert.match(manifest.host.minVersion, /^\d+\.\d+\.\d+$/);
+  assert.match(manifest.version, /^([0-9]|[1-9][0-9])\.([0-9]|[1-9][0-9])\.([0-9]|[1-9][0-9])$/);
+});
+
+test("every zip entry carries a valid date", () => {
+  const zip = fs.readFileSync(out);
+  const endAt = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  let at = zip.readUInt32LE(endAt + 16);
+  for (let i = 0; i < zip.readUInt16LE(endAt + 10); i++) {
+    for (const date of [zip.readUInt16LE(at + 14), zip.readUInt16LE(zip.readUInt32LE(at + 42) + 12)]) {
+      const month = (date >> 5) & 15;
+      const day = date & 31;
+      assert.ok(month >= 1 && month <= 12 && day >= 1, `entry ${i} date ${date}`);
+    }
+    at += 46 + zip.readUInt16LE(at + 28) + zip.readUInt16LE(at + 30) + zip.readUInt16LE(at + 32);
+  }
+});
+
 test("the manifest asks for nothing it doesn't need", () => {
   const manifest = JSON.parse(entries().get("manifest.json").toString("utf8"));
   assert.deepEqual(manifest.requiredPermissions, { localFileSystem: "fullAccess" });

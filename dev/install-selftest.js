@@ -29,7 +29,7 @@ const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 manifest.id = ID;
 manifest.name = "TV Self Test";
 manifest.version = VER;
-manifest.host[0].data.loadEvent = "startup";
+manifest.host.data.loadEvent = "startup";
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
 const script = fs.readFileSync(path.join(__dirname, "selftest", "selftest.js"), "utf8").replace("__CONFIG__", config.trim());
@@ -38,7 +38,7 @@ const htmlPath = path.join(dest, "index.html");
 fs.writeFileSync(htmlPath, fs.readFileSync(htmlPath, "utf8").replace('<script src="main.js"></script>', '<script src="main.js"></script>\n    <script src="selftest.js"></script>'));
 
 reg.plugins.push({
-  hostMinVersion: manifest.host[0].minVersion,
+  hostMinVersion: manifest.host.minVersion,
   name: manifest.name,
   path: `$localPlugins\\External\\${ID}_${VER}`,
   pluginId: ID,
