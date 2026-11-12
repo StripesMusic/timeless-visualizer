@@ -1,0 +1,27 @@
+{
+  "id": "com.stripesmusic.timelessvisualizer",
+  "name": "Timeless Visualizer",
+  "version": "1.0.0",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "host": [{ "app": "PS", "minVersion": "27.0.0", "data": { "apiVersion": 2 } }],
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "timelessVisualizerPanel",
+      "label": { "default": "Timeless Visualizer" },
+      "minimumSize": { "width": 280, "height": 320 },
+      "maximumSize": { "width": 800, "height": 2000 },
+      "preferredDockedSize": { "width": 320, "height": 760 },
+      "preferredFloatingSize": { "width": 320, "height": 760 },
+      "icons": [
+        { "width": 23, "height": 23, "path": "icons/panel-dark.png", "scale": [1, 2], "theme": ["darkest", "dark", "medium"] },
+        { "width": 23, "height": 23, "path": "icons/panel-light.png", "scale": [1, 2], "theme": ["lightest", "light"] }
+      ]
+    }
+  ],
+  "icons": [
+    { "width": 48, "height": 48, "path": "icons/plugin.png", "scale": [1, 2], "theme": ["all"], "species": ["generic"] }
+  ],
+  "requiredPermissions": { "localFileSystem": "fullAccess" }
+}

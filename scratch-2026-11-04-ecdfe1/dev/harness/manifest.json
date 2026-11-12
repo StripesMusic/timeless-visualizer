@@ -1,0 +1,24 @@
+{
+  "id": "com.stripesmusic.tvdev",
+  "name": "TV Dev Harness",
+  "version": "0.0.1",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "host": { "app": "PS", "minVersion": "24.0.0", "data": { "apiVersion": 2, "loadEvent": "startup" } },
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "tvdevPanel",
+      "label": { "default": "TV Dev Harness" },
+      "minimumSize": { "width": 200, "height": 100 },
+      "maximumSize": { "width": 800, "height": 800 },
+      "preferredDockedSize": { "width": 230, "height": 200 },
+      "preferredFloatingSize": { "width": 230, "height": 200 }
+    }
+  ],
+  "requiredPermissions": {
+    "localFileSystem": "fullAccess",
+    "allowCodeGenerationFromStrings": true,
+    "launchProcess": { "schemes": ["file"], "extensions": [".bat", ".aep", ".jsx"] }
+  }
+}
