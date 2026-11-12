@@ -27,6 +27,7 @@ The template paths and the After Effects path are at the bottom of the panel, an
 - Building again only fills in what's missing. Boards that exist are skipped, and an existing `_VisualsAEP` project is left alone while its images are refreshed.
 - A few layers show a small lock icon: hidden layers, adjustment layers and layers sitting fully off their board. That lock only stops Photoshop from moving them to another artboard when a board moves. You can still edit them.
 - If After Effects has an unsaved project open, the script stops without touching it and the report tells you.
+- Clarity and Dehaze and Grain adjustment layers look at the whole canvas, so the source board can render very slightly differently once new boards make the document bigger (on TMLS047, about 1% at most). The source layers themselves don't change, and adding an artboard by hand does the same.
 
 ## Left for you by hand
 
