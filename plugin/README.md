@@ -2,11 +2,11 @@
 
 A Photoshop panel that turns one finished cover artwork into the Timeless release pack: 7 new artboards in the PSD and an After Effects project saved next to it. It makes the files. You render them.
 
-Windows only. Needs Photoshop 2026 and After Effects 2026.
+Windows only. Needs Photoshop 2026 or newer and After Effects 2024 or newer.
 
 ## Install
 
-Double-click `TimelessVisualizer-1.0.0.ccx`, then open **Plugins > Timeless Visualizer** in Photoshop.
+Double-click `TimelessVisualizer-1.0.1.ccx`, then open **Plugins > Timeless Visualizer** in Photoshop.
 
 ## Use
 
@@ -17,7 +17,7 @@ Double-click `TimelessVisualizer-1.0.0.ccx`, then open **Plugins > Timeless Visu
 5. Add the audio if you have it. If you leave it blank, the audio layer is switched off and the report says so.
 6. Click **Build**. After Effects opens if it isn't open already.
 
-The template paths and the After Effects path are at the bottom of the panel, and the panel remembers them.
+The template paths and the After Effects path are at the bottom of the panel, and the panel remembers them. The panel finds the newest After Effects installed in the usual place (for example 2027 over 2026) on its own; a path you choose by hand is kept.
 
 ## What to expect
 

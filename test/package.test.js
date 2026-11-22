@@ -15,7 +15,7 @@ test("the manifest is at the root, with the right id and name", () => {
   const manifest = JSON.parse(entries().get("manifest.json").toString("utf8"));
   assert.equal(manifest.id, "com.stripesmusic.timelessvisualizer");
   assert.equal(manifest.name, "Timeless Visualizer");
-  assert.equal(manifest.version, "1.0.0");
+  assert.equal(manifest.version, "1.0.1");
 });
 
 test("the manifest names one host as an object, which Creative Cloud needs to install a .ccx", () => {

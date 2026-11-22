@@ -2,6 +2,7 @@
 // can drive the real controls without clicking.
 const { validateInputs, explainError } = require("./core/validate");
 const { BOARDS } = require("./core/boards");
+const { resolveAePath } = require("./core/aepath");
 
 const STORE_KEY = "timelessVisualizer.paths";
 const TEMPLATES_DIR = "A:\\Personal GDrive\\Media Assets\\Artwork Assets\\Templates\\";
@@ -9,7 +10,8 @@ const DEFAULT_PATHS = {
   flyer: TEMPLATES_DIR + "Timeless Flyer Social Template.psd",
   banner: TEMPLATES_DIR + "Timeless SC Banner Template.psd",
   visuals: TEMPLATES_DIR + "Timeless Visuals Template.aep",
-  ae: "C:\\Program Files\\Adobe\\Adobe After Effects 2026\\Support Files\\AfterFX.exe",
+  // Only shown when no After Effects is installed in the usual place; see core/aepath.js.
+  ae: "C:\\Program Files\\Adobe\\Adobe After Effects 2027\\Support Files\\AfterFX.exe",
 };
 const PATH_FIELDS = [
   ["flyer", "pathFlyer", "chooseFlyer", ["psd"]],
@@ -22,12 +24,15 @@ const GENERATED = new Set(BOARDS.map((b) => b.name));
 
 const baseName = (path) => path.replace(/^.*[\\/]/, "");
 
-function loadPaths(storage) {
+function loadPaths(storage, exists) {
+  let paths;
   try {
-    return { ...DEFAULT_PATHS, ...JSON.parse(storage.getItem(STORE_KEY) || "{}") };
+    paths = { ...DEFAULT_PATHS, ...JSON.parse(storage.getItem(STORE_KEY) || "{}") };
   } catch (e) {
-    return { ...DEFAULT_PATHS };
+    paths = { ...DEFAULT_PATHS };
   }
+  paths.ae = resolveAePath(paths.ae, exists, DEFAULT_PATHS.ae);
+  return paths;
 }
 
 function documentPath(doc) {
@@ -76,7 +81,7 @@ function reportLines(report) {
 
 function createPanel(root, services) {
   const el = (id) => root.querySelector("#" + id);
-  const paths = loadPaths(services.storage);
+  const paths = loadPaths(services.storage, services.exists);
   const state = { docId: null, boards: [], textIds: [], logoIds: [], fonts: [], audio: { comingSoon: null, outNow: null }, busy: false };
 
   const selectedSource = () => {

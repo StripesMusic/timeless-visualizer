@@ -50,7 +50,7 @@ exports.run = async (arg, ctx) => {
   let panel = createPanel(root, services);
   check("with no document, Build is off", el("build").hasAttribute("disabled"));
   check("with no document, the panel says to open one", el("problems").textContent.includes("Open a PSD first."), el("problems").textContent);
-  check("default template paths are filled in", el("pathFlyer").value === DEFAULT_PATHS.flyer && el("pathAe").value === DEFAULT_PATHS.ae, el("pathFlyer").value);
+  check("default template paths are filled in", el("pathFlyer").value === DEFAULT_PATHS.flyer && /AfterFX\.exe$/.test(el("pathAe").value), el("pathFlyer").value);
 
   // Unsaved document.
   await kit.modal(() => app.documents.add({ width: 100, height: 100, resolution: 72, mode: "RGBColorMode", fill: "white", name: "TV Helper Unsaved" }));
@@ -107,7 +107,7 @@ exports.run = async (arg, ctx) => {
   check("Build passes the panel's values on", calls.length === 1 && calls[0].doc.id === doc.id && calls[0].textIds[0] === textLayer.id && calls[0].logoIds[0] === logoLayer.id && calls[0].date === "28 AUG 2026" && calls[0].sourceId === null, calls[0] && { t: calls[0].textIds, l: calls[0].logoIds, d: calls[0].date });
   check("Build passes the font and color", calls[0].font.font === "ArialMT" && calls[0].font.color.red > 250);
   check("Build passes the audio", calls[0].audio.comingSoon === "C:\\Music\\Song Name.wav" && calls[0].audio.outNow === null);
-  check("Build passes the template and AE paths", calls[0].templates.flyer === DEFAULT_PATHS.flyer && calls[0].aePath === DEFAULT_PATHS.ae);
+  check("Build passes the template and AE paths", calls[0].templates.flyer === DEFAULT_PATHS.flyer && calls[0].aePath === el("pathAe").value);
   const text = el("report").textContent;
   check("the report lists what was built and skipped", text.includes("Built: BGSquare") && text.includes("left alone: BGPortrait"), text);
   check("the report gives the AEP and any issues", text.includes("X_VisualsAEP.aep") && text.includes("left blank"), text);
