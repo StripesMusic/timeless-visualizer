@@ -1,7 +1,7 @@
 {
   "id": "com.stripesmusic.timelessvisualizer",
   "name": "Timeless Visualizer",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "index.html",
   "manifestVersion": 5,
   "host": { "app": "PS", "minVersion": "27.0.0", "data": { "apiVersion": 2 } },

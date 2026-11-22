@@ -6,7 +6,7 @@ Windows only. Needs Photoshop 2026 or newer and After Effects 2024 or newer.
 
 ## Install
 
-Double-click `TimelessVisualizer-1.0.1.ccx`, then open **Plugins > Timeless Visualizer** in Photoshop.
+Double-click `TimelessVisualizer-1.0.2.ccx`, then open **Plugins > Timeless Visualizer** in Photoshop.
 
 ## Use
 

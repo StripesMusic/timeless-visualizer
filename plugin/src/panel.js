@@ -113,8 +113,16 @@ function createPanel(root, services) {
     };
   }
 
+  // Checking a path can be slow (A:\ is a Google Drive mount), and validate runs on every keystroke and
+  // layer click, so answers are kept until the next full refresh or a path change.
+  let seen = new Map();
+  const existsCached = (path) => {
+    if (!seen.has(path)) seen.set(path, services.exists(path));
+    return seen.get(path);
+  };
+
   function validate() {
-    const problems = validateInputs(inputs(), services.exists);
+    const problems = validateInputs(inputs(), existsCached);
     setList(root, "problems", state.busy ? [] : problems);
     setDisabled(el("build"), state.busy || problems.length > 0);
     return problems;
@@ -158,15 +166,21 @@ function createPanel(root, services) {
     setList(root, "report", []);
   }
 
-  function refresh() {
+  // `quick` is for layer selection: the artboards only change when layers are made, deleted, opened or
+  // closed, so a plain click skips re-reading them unless it switched documents. Reading every artboard
+  // on every click made Photoshop sluggish once a build had added seven more.
+  function refresh({ quick = false } = {}) {
     if (state.busy) return;
     const doc = services.activeDocument();
     const id = doc ? doc.id : null;
-    if (id !== state.docId) {
+    const switched = id !== state.docId;
+    if (switched) {
       state.docId = id;
       el("source").selectedIndex = -1;
       resetForDocument();
     }
+    if (quick && !switched) return;
+    seen = new Map();
     showSources();
     validate();
   }
@@ -193,6 +207,7 @@ function createPanel(root, services) {
 
   function setPath(key, fieldId, value) {
     paths[key] = value;
+    seen.delete(value);
     el(fieldId).value = value;
     services.storage.setItem(STORE_KEY, JSON.stringify(paths));
     validate();
