@@ -31,6 +31,14 @@ body {
   margin-right: 0;
 }
 
+/* A long list of picked layer names next to a button used to squeeze the button until its label
+   wrapped onto two lines. Buttons keep their natural width; the names get the leftover space. */
+.row > sp-button {
+  flex-grow: 0;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .grow {
   flex-grow: 1;
   flex-shrink: 1;

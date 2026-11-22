@@ -2,6 +2,7 @@
 // can drive the real controls without clicking.
 const { validateInputs, explainError } = require("./core/validate");
 const { BOARDS } = require("./core/boards");
+const { resolveAePath } = require("./core/aepath");
 
 const STORE_KEY = "timelessVisualizer.paths";
 const TEMPLATES_DIR = "A:\\Personal GDrive\\Media Assets\\Artwork Assets\\Templates\\";
@@ -9,7 +10,8 @@ const DEFAULT_PATHS = {
   flyer: TEMPLATES_DIR + "Timeless Flyer Social Template.psd",
   banner: TEMPLATES_DIR + "Timeless SC Banner Template.psd",
   visuals: TEMPLATES_DIR + "Timeless Visuals Template.aep",
-  ae: "C:\\Program Files\\Adobe\\Adobe After Effects 2026\\Support Files\\AfterFX.exe",
+  // Only shown when no After Effects is installed in the usual place; see core/aepath.js.
+  ae: "C:\\Program Files\\Adobe\\Adobe After Effects 2027\\Support Files\\AfterFX.exe",
 };
 const PATH_FIELDS = [
   ["flyer", "pathFlyer", "chooseFlyer", ["psd"]],
@@ -22,12 +24,15 @@ const GENERATED = new Set(BOARDS.map((b) => b.name));
 
 const baseName = (path) => path.replace(/^.*[\\/]/, "");
 
-function loadPaths(storage) {
+function loadPaths(storage, exists) {
+  let paths;
   try {
-    return { ...DEFAULT_PATHS, ...JSON.parse(storage.getItem(STORE_KEY) || "{}") };
+    paths = { ...DEFAULT_PATHS, ...JSON.parse(storage.getItem(STORE_KEY) || "{}") };
   } catch (e) {
-    return { ...DEFAULT_PATHS };
+    paths = { ...DEFAULT_PATHS };
   }
+  paths.ae = resolveAePath(paths.ae, exists, DEFAULT_PATHS.ae);
+  return paths;
 }
 
 function documentPath(doc) {
@@ -76,7 +81,7 @@ function reportLines(report) {
 
 function createPanel(root, services) {
   const el = (id) => root.querySelector("#" + id);
-  const paths = loadPaths(services.storage);
+  const paths = loadPaths(services.storage, services.exists);
   const state = { docId: null, boards: [], textIds: [], logoIds: [], fonts: [], audio: { comingSoon: null, outNow: null }, busy: false };
 
   const selectedSource = () => {
@@ -108,8 +113,16 @@ function createPanel(root, services) {
     };
   }
 
+  // Checking a path can be slow (A:\ is a Google Drive mount), and validate runs on every keystroke and
+  // layer click, so answers are kept until the next full refresh or a path change.
+  let seen = new Map();
+  const existsCached = (path) => {
+    if (!seen.has(path)) seen.set(path, services.exists(path));
+    return seen.get(path);
+  };
+
   function validate() {
-    const problems = validateInputs(inputs(), services.exists);
+    const problems = validateInputs(inputs(), existsCached);
     setList(root, "problems", state.busy ? [] : problems);
     setDisabled(el("build"), state.busy || problems.length > 0);
     return problems;
@@ -153,15 +166,21 @@ function createPanel(root, services) {
     setList(root, "report", []);
   }
 
-  function refresh() {
+  // `quick` is for layer selection: the artboards only change when layers are made, deleted, opened or
+  // closed, so a plain click skips re-reading them unless it switched documents. Reading every artboard
+  // on every click made Photoshop sluggish once a build had added seven more.
+  function refresh({ quick = false } = {}) {
     if (state.busy) return;
     const doc = services.activeDocument();
     const id = doc ? doc.id : null;
-    if (id !== state.docId) {
+    const switched = id !== state.docId;
+    if (switched) {
       state.docId = id;
       el("source").selectedIndex = -1;
       resetForDocument();
     }
+    if (quick && !switched) return;
+    seen = new Map();
     showSources();
     validate();
   }
@@ -188,6 +207,7 @@ function createPanel(root, services) {
 
   function setPath(key, fieldId, value) {
     paths[key] = value;
+    seen.delete(value);
     el(fieldId).value = value;
     services.storage.setItem(STORE_KEY, JSON.stringify(paths));
     validate();
